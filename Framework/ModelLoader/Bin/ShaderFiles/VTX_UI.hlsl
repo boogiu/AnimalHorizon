@@ -1,0 +1,297 @@
+#include "Shader_Define.hlsl"
+
+Texture2D UI_MaskTexture;
+Texture2D UI_FrameTexture;
+Texture2D UI_GradationTexture;
+
+float2 MaskScale = (1.2f, 1.2f);
+float2 vOffset_Tile;
+float2 vScale_Tile;
+float fElapsedTime;
+
+struct VS_IN
+{
+    float3 vPosition : POSITION;
+};
+
+struct VS_OUT
+{
+    float4 vWorldPos : POSITION;
+};
+
+VS_OUT VS_MAIN(VS_IN In)
+{
+    VS_OUT Out;
+    Out.vWorldPos = mul(float4(In.vPosition, 1.f), ObjectBufferArray[TransformIndex].Transform);
+   
+    return Out;
+}
+
+struct GS_IN
+{
+    float4 vWorldPos : POSITION;
+};
+
+struct GS_OUT
+{
+    float4 vPosition : SV_POSITION;
+    float2 vTexcoord : TEXCOORD0;
+};
+
+[maxvertexcount(6)]
+void GS_MAIN(point GS_IN In[1], inout TriangleStream<GS_OUT> triStream)
+{
+    GS_OUT v[4];
+
+    float3 worldPos = In[0].vWorldPos.xyz;
+    
+    float3 right = normalize(ObjectBufferArray[TransformIndex].Transform[0].xyz);
+    float3 up = normalize(ObjectBufferArray[TransformIndex].Transform[1].xyz);
+    float scaleX = length(ObjectBufferArray[TransformIndex].Transform[0].xyz);
+    float scaleY = length(ObjectBufferArray[TransformIndex].Transform[1].xyz);
+
+    float3 offsetRight = right * ( scaleX*0.5f);
+    float3 offsetUp = up * (scaleY * 0.5f);
+
+    // 정점 4개 위치 계산 (월드 기준)
+    float3 p0 = worldPos + (-offsetRight + offsetUp);
+    float3 p1 = worldPos + (offsetRight + offsetUp);
+    float3 p2 = worldPos + (offsetRight - offsetUp);
+    float3 p3 = worldPos + (-offsetRight - offsetUp);
+
+    // 직교 투영 사용
+    v[0].vPosition = mul(float4(p0, 1.f), matOrthograph);
+    v[0].vTexcoord = float2(0, 0);
+
+    v[1].vPosition = mul(float4(p1, 1.f), matOrthograph);
+    v[1].vTexcoord = float2(1, 0);
+
+    v[2].vPosition = mul(float4(p2, 1.f), matOrthograph);
+    v[2].vTexcoord = float2(1, 1);
+
+    v[3].vPosition = mul(float4(p3, 1.f), matOrthograph);
+    v[3].vTexcoord = float2(0, 1);
+
+    triStream.Append(v[0]);
+    triStream.Append(v[1]);
+    triStream.Append(v[2]);
+    triStream.RestartStrip();
+
+    triStream.Append(v[0]);
+    triStream.Append(v[2]);
+    triStream.Append(v[3]);
+    triStream.RestartStrip();
+}
+
+[maxvertexcount(6)]
+void GS_TILE(point GS_IN In[1], inout TriangleStream<GS_OUT> triStream)
+{
+    GS_OUT v[4];
+
+    float3 worldPos = In[0].vWorldPos.xyz;
+    
+    float3 right = normalize(ObjectBufferArray[TransformIndex].Transform[0].xyz);
+    float3 up = normalize(ObjectBufferArray[TransformIndex].Transform[1].xyz);
+    float scaleX = length(ObjectBufferArray[TransformIndex].Transform[0].xyz);
+    float scaleY = length(ObjectBufferArray[TransformIndex].Transform[1].xyz);
+
+    float3 offsetRight = right * (scaleX * 0.5f);
+    float3 offsetUp = up * (scaleY * 0.5f);
+
+    // 정점 4개 위치 계산 (월드 기준)
+    float3 p0 = worldPos + (-offsetRight + offsetUp);
+    float3 p1 = worldPos + (offsetRight + offsetUp);
+    float3 p2 = worldPos + (offsetRight - offsetUp);
+    float3 p3 = worldPos + (-offsetRight - offsetUp);
+
+    // 직교 투영 사용
+    v[0].vPosition = mul(float4(p0, 1.f), matOrthograph);
+    v[0].vTexcoord = vOffset_Tile;
+
+    v[1].vPosition = mul(float4(p1, 1.f), matOrthograph);
+    v[1].vTexcoord = vOffset_Tile + float2(vScale_Tile.x, 0);
+
+    v[2].vPosition = mul(float4(p2, 1.f), matOrthograph);
+    v[2].vTexcoord = vOffset_Tile + vScale_Tile;
+
+    v[3].vPosition = mul(float4(p3, 1.f), matOrthograph);
+    v[3].vTexcoord = vOffset_Tile + float2(0, vScale_Tile.y);
+
+    triStream.Append(v[0]);
+    triStream.Append(v[1]);
+    triStream.Append(v[2]);
+    triStream.RestartStrip();
+
+    triStream.Append(v[0]);
+    triStream.Append(v[2]);
+    triStream.Append(v[3]);
+    triStream.RestartStrip();
+}
+
+struct PS_IN
+{
+    float4 vPosition : SV_POSITION;
+    float2 vTexcoord : TEXCOORD0;
+};
+
+struct PS_OUT
+{
+    vector vColor : SV_TARGET0;
+};
+
+PS_OUT PS_MAIN(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vDiffuse = SpriteTexture.Sample(LinearSampler, In.vTexcoord);
+        
+    if (vDiffuse.a < 0.1f)
+        discard;
+    Out.vColor = vDiffuse ;
+    return Out;
+}
+
+PS_OUT PS_MAIN_GRAD(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vDiffuse = SpriteTexture.Sample(LinearSampler, In.vTexcoord);
+    vector vGrad = UI_GradationTexture.Sample(LinearSampler, In.vTexcoord);
+
+    Out.vColor = vDiffuse + vDiffuse * (vGrad.r) * 0.2f;
+    
+    if (Out.vColor.a < 0.1f)
+        discard;
+    return Out;
+}
+
+PS_OUT PS_MASKING_UI(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vDiffuse = SpriteTexture.Sample(LinearSampler, In.vTexcoord);
+
+    float MaskScale = 1.3f;
+    float2 uv = In.vTexcoord;
+    float2 scaledUV = ((uv - 0.5f) / MaskScale) + 0.5f;
+
+    vector vMasking = UI_MaskTexture.Sample(PointClampSampler, scaledUV);
+    vector vFrame = UI_FrameTexture.Sample(LinearSampler, In.vTexcoord);
+    
+    if (vFrame.a < 0.1f)
+        discard;
+    
+    Out.vColor = vDiffuse - vDiffuse*(vMasking.r)*0.1;
+    if (Out.vColor.a < 0.1f)
+        discard;
+    return Out;
+}
+
+PS_OUT PS_MASKING_INSIDE_UI(PS_IN In)
+{
+    PS_OUT Out;
+
+    vector vDiffuse = SpriteTexture.Sample(LinearSampler, In.vTexcoord);
+    float2 uv = In.vTexcoord;
+    float2 scaledUV = (uv - 0.5f) / MaskScale + 0.5f;
+    vector vMasking = UI_MaskTexture.Sample(PointClampSampler, In.vTexcoord);
+
+    Out.vColor = vDiffuse - vDiffuse * (vMasking.a);
+    if (Out.vColor.a < 0.1f)
+        discard;
+    return Out;
+}
+
+PS_OUT PS_TEXTURE_TILE(PS_IN In)
+{
+    PS_OUT Out;
+    vector vDiffuse = SpriteTexture.Sample(PointClampSampler, In.vTexcoord);
+    
+    Out.vColor = vDiffuse ;
+    if (Out.vColor.a < 0.1f)
+        discard;
+    return Out;
+}
+
+
+PS_OUT PS_SCREEN_FX(PS_IN In)
+{
+    PS_OUT Out;
+    vector vDiffuse = SpriteTexture.Sample(PointLinearSampler, In.vTexcoord);
+    if(vDiffuse.a >fElapsedTime)
+        discard;
+    
+    Out.vColor = float4(0.f, 0.f, 0.f,1.f);
+    
+    return Out;
+}
+
+technique11 DefaultTechnique
+{
+    pass Opaque
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_AlphaBlend, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_MAIN();
+        PixelShader = compile ps_5_0 PS_MAIN();
+    }  
+    pass Gradtion
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_AlphaBlend, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_MAIN();
+        PixelShader = compile ps_5_0 PS_MAIN_GRAD();
+    }
+    pass MaskingScreen
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_MAIN();
+        PixelShader = compile ps_5_0 PS_MAIN();
+    }
+    pass Masking_UI
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_AlphaBlend, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_MAIN();
+        PixelShader = compile ps_5_0 PS_MASKING_UI();
+    }
+
+    pass Inside_Empty
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_AlphaBlend, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_MAIN();
+        PixelShader = compile ps_5_0 PS_MASKING_INSIDE_UI();
+    }
+
+    pass Tile_Texture
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_AlphaBlend, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_TILE();
+        PixelShader = compile ps_5_0 PS_TEXTURE_TILE();
+    }
+    pass Screen_FX
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_None, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = compile gs_5_0 GS_MAIN();
+        PixelShader = compile ps_5_0 PS_SCREEN_FX();
+    }
+}
+
