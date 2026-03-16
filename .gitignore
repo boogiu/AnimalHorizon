@@ -1,0 +1,58 @@
+# Visual Studio 관련 파일
+.vs/
+*.suo
+*.user
+*.cache
+*.ilk
+*.pdb
+*.obj
+*.ipch
+*.log
+*.tlog
+*.VC.db
+*.db-shm
+*.db-wal
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+/.vs/DevStudy/FileContentIndex
+/.vs
+/DataStructure/.vs/DataStructure
+
+#Image File
+/.vs/Image
+*.png
+*.bmp
+*.dds
+*.model
+*.mat
+Resources/

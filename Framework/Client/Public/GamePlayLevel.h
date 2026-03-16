@@ -1,0 +1,49 @@
+#pragma once
+#include "Level.h"
+
+NS_BEGIN(Engine)
+class CGameInstance;
+class CUI_Object;
+class IProtoService;
+class IObjectService;
+NS_END
+
+NS_BEGIN(Client)
+class CGamePlayLevel :
+	public CLevel
+{
+private:
+	CGamePlayLevel(const string& LevelKey);
+	virtual ~CGamePlayLevel() DEFAULT;
+
+public:
+	virtual HRESULT Initialize() override;
+	virtual HRESULT Awake() override;
+	virtual void Update() override;
+	virtual HRESULT Render()override;
+	HRESULT Render(ID3D11DeviceContext* pContext)override;
+
+public:
+	static void PreLoad_Level();
+
+private:
+	CGameInstance* m_pGameInstance = { nullptr };
+	IProtoService* m_pProtoManager = { nullptr };
+	IObjectService* m_pObjectManager = { nullptr };
+
+	CGameObject* m_pSky = { nullptr };
+	CGameObject* m_pSun = { nullptr };
+	CGameObject* m_pCloud = { nullptr };
+	CGameObject* m_pLeaf = { nullptr };
+	CGameObject* m_pPlayer = { nullptr };
+	class CMapLoader* m_pLoader = { nullptr };
+	_bool m_bStart = false;
+	_bool m_bFirstIn = false;
+
+public:
+	static CGamePlayLevel* Create(const string& LevelKey);
+	virtual void Free() override;
+
+};
+
+NS_END

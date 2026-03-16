@@ -1,0 +1,558 @@
+#include "Shader_Define.hlsl"
+float2 leafPalette = { 0.25,0.3};
+float4x4 fWind_Matrix ;
+float fFishAlpha ; 
+float2 PaletteIndex;
+
+struct VS_IN
+{
+    float3 vPosition : POSITION;
+    float3 vNormal : NORMAL;
+    float2 vTexcoord : TEXCOORD0;
+    float3 vTangent : TANGENT;
+    uint4 vBlendIndex : BLENDINDEX;
+    float4 vBlendWeight : BLENDWEIGHT;
+};
+
+struct VS_OUT
+{
+    float4 vPosition : SV_POSITION;
+    float4 vNormal : NORMAL;
+    float2 vTexcoord : TEXCOORD0;
+    float4 vProjPos : TEXCOORD1;
+    
+    float3 vTangent : TANGENT;
+    float3 vBinormal : BINORMAL;
+};
+
+
+VS_OUT VS_NOCURVE_MAIN(VS_IN In)
+{
+    VS_OUT Out;
+    
+    matrix matWV, matWVP;
+    
+    matWV = mul(ObjectBufferArray[TransformIndex].Transform, matView);
+    matWVP = mul(matWV, matProjection);
+    
+    float fWeightW = 1.0 - (In.vBlendWeight.x + In.vBlendWeight.y + In.vBlendWeight.z);
+
+    float4x4 BoneMatrix =
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.x].BoneMat * In.vBlendWeight.x +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.y].BoneMat * In.vBlendWeight.y +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.z].BoneMat * In.vBlendWeight.z +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.w].BoneMat * fWeightW;
+    
+    vector vPosition = mul(float4(In.vPosition, 1.f), BoneMatrix);
+    vector vNormal = mul(float4(In.vNormal, 0.f), BoneMatrix);
+    
+    float3 worldPos = mul(vPosition, ObjectBufferArray[TransformIndex].Transform).xyz;
+    float4 viewPos = mul(float4(worldPos, 1.f), matView);
+    float4 projPos = mul(viewPos, matProjection);
+
+    Out.vPosition = projPos;
+    
+    Out.vTexcoord = In.vTexcoord;
+    Out.vNormal = mul(vNormal, ObjectBufferArray[TransformIndex].Transform);
+    Out.vProjPos = Out.vPosition;
+
+    Out.vTangent = normalize(mul(vector(In.vTangent, 0.f), BoneMatrix)).xyz;
+   Out.vTangent.xz *= -1;
+    Out.vBinormal = normalize(cross(Out.vNormal.xyz, Out.vTangent.xyz));
+    return Out;
+}
+
+
+VS_OUT VS_MAIN(VS_IN In)
+{
+    VS_OUT Out;
+    
+    matrix matWV, matWVP;
+    
+    matWV = mul(ObjectBufferArray[TransformIndex].Transform, matView);
+    matWVP = mul(matWV, matProjection);
+    
+    float fWeightW = 1.0 - (In.vBlendWeight.x + In.vBlendWeight.y + In.vBlendWeight.z);
+
+    float4x4 BoneMatrix =
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.x].BoneMat * In.vBlendWeight.x +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.y].BoneMat * In.vBlendWeight.y +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.z].BoneMat * In.vBlendWeight.z +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.w].BoneMat * fWeightW;
+    
+    vector vPosition = mul(float4(In.vPosition, 1.f), BoneMatrix);
+    vector vNormal = mul(float4(In.vNormal, 0.f), BoneMatrix);
+    
+    float3 worldPos = mul(vPosition, ObjectBufferArray[TransformIndex].Transform).xyz;
+    float3 toObj = worldPos - vCamPosition.xyz;
+     float dist = dot(toObj, CameraForward);
+    float curve = (dist * dist) / PlanetRadius * CurveStrength;
+    worldPos.y -= curve;
+    
+    float4 viewPos = mul(float4(worldPos, 1.f), matView);
+    float4 projPos = mul(viewPos, matProjection);
+
+    Out.vPosition = projPos;
+    
+    Out.vTexcoord = In.vTexcoord;
+    Out.vNormal = mul(vNormal, ObjectBufferArray[TransformIndex].Transform);
+    Out.vProjPos = Out.vPosition;
+
+    Out.vTangent = normalize(mul(vector(In.vTangent, 0.f), BoneMatrix)).xyz;
+    Out.vTangent.xz *= -1;
+    Out.vBinormal = normalize(cross(Out.vNormal.xyz, Out.vTangent.xyz));
+    return Out;
+}
+
+VS_OUT VS_LEAF(VS_IN In)
+{
+    VS_OUT Out;
+    
+    matrix matWV, matWVP;
+    
+    matWV = mul(ObjectBufferArray[TransformIndex].Transform, matView);
+    matWVP = mul(matWV, matProjection);
+    
+    float fWeightW = 1.0 - (In.vBlendWeight.x + In.vBlendWeight.y + In.vBlendWeight.z);
+    
+    
+    float4x4 BoneMatrix =
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.x].BoneMat * In.vBlendWeight.x +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.y].BoneMat * In.vBlendWeight.y +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.z].BoneMat * In.vBlendWeight.z +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.w].BoneMat * fWeightW;
+    
+    vector vPosition = mul(float4(In.vPosition, 1.f), BoneMatrix);
+    vector vNormal = mul(float4(In.vNormal, 0.f), BoneMatrix);
+    float3 worldPos = mul(vPosition, ObjectBufferArray[TransformIndex].Transform).xyz;
+    float3 toObj = worldPos - vCamPosition.xyz;
+     float dist = dot(toObj, CameraForward);
+    float curve = (dist * dist) / PlanetRadius * CurveStrength;
+    worldPos.y -= curve;
+    
+    float4 viewPos = mul(float4(worldPos, 1.f), matView);
+    float4 projPos = mul(viewPos, matProjection);
+    Out.vPosition = projPos;
+
+
+    Out.vTexcoord = In.vTexcoord;
+    Out.vNormal = mul(vNormal, ObjectBufferArray[TransformIndex].Transform);
+    Out.vProjPos = Out.vPosition;
+
+    Out.vTangent = normalize(mul(vector(In.vTangent, 0.f), BoneMatrix)).xyz;
+    Out.vTangent.xz *= -1;
+    Out.vBinormal = normalize(cross(Out.vNormal.xyz, Out.vTangent.xyz));
+    return Out;
+}
+struct PS_IN
+{
+    float4 vPosition : SV_POSITION;
+    float4 vNormal : NORMAL;
+    float2 vTexcoord : TEXCOORD0;
+    float4 vProjPos : TEXCOORD1;
+    
+    float3 vTangent : TANGENT;
+    float3 vBinormal : BINORMAL;
+};
+
+struct PS_OUT
+{
+    vector vDiffuse : SV_TARGET0;
+    vector vNormal : SV_TARGET1;
+    vector vDepth : SV_TARGET2;
+    vector vEmission : SV_TARGET3;
+};
+
+PS_OUT PS_MAIN(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vMtrlDiffuse = DiffuseTexture.Sample(DefaultSampler, In.vTexcoord);
+    if (vMtrlDiffuse.a < 0.2)
+    {
+        discard;
+    }
+    
+    Out.vDiffuse = vMtrlDiffuse;
+    vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+    float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+    float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal, In.vNormal.xyz);
+ 
+    vNormal = mul(vNormal, WorldMatrix);
+    
+    Out.vNormal = vector(vNormal.xyz*0.5f + 0.5f, 1.f);
+    Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+
+    return Out;
+}
+
+PS_OUT PS_NET(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vMtrlDiffuse = DiffuseTexture.Sample(DefaultSampler, In.vTexcoord);
+    Out.vDiffuse = vMtrlDiffuse;
+    Out.vDiffuse.a = 1;
+    vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+    float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+    float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal, In.vNormal.xyz);
+ 
+    vNormal = mul(vNormal, WorldMatrix);
+    
+    Out.vNormal = vector(vNormal.xyz * 0.5f + 0.5f, 1.f);
+    Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+
+    return Out;
+}
+PS_OUT PS_SKIN(PS_IN In)
+{
+    PS_OUT Out;
+     
+    vector vMtrlDiffuse = DiffuseTexture.Sample(DefaultSampler, In.vTexcoord);
+    
+    vMtrlDiffuse -=  float4(0.06, 0.23, 0.38, 0.f);
+    if (vMtrlDiffuse.a < 0.2)
+    {
+        discard;
+    }
+    Out.vDiffuse = vMtrlDiffuse;
+    vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+    float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+    float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal , In.vNormal.xyz);
+    
+    vNormal = mul(vNormal, WorldMatrix);
+    
+    Out.vNormal = vector(vNormal.xyz * 0.5f + 0.5f, 1.f);
+    Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+
+    return Out;
+}
+
+PS_OUT PS_TREE(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vMixture = MixtureTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vAlbGry = AlbedoGrayTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vMtrlDiffuse = GradationTexture.Sample(DefaultSampler, float2((1 - vAlbGry.r), 0.55));
+    if (vMtrlDiffuse.a < 0.2)
+    {
+        discard;
+    }
+    
+    Out.vDiffuse = vMtrlDiffuse;
+    vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+    float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+    float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal, In.vNormal.xyz);
+  
+    vNormal = mul(vNormal, WorldMatrix);
+    
+    Out.vNormal = vector(vNormal.xyz * 0.5f + 0.5f, 1.f);
+ Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+    return Out;
+}
+
+PS_OUT PS_LEAF(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vMixture = MixtureTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vAlbGry = AlbedoGrayTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vMtrlDiffuse = GradationTexture.Sample(DefaultSampler, leafPalette );
+    vector vOpacity = OpacityTexture.Sample(DefaultSampler, In.vTexcoord);
+    
+    if (vOpacity.r > 0)
+    {
+        Out.vDiffuse = vMtrlDiffuse + (1 - vAlbGry.a) *0.1f;
+        vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+        float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+        float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal, In.vNormal.xyz);
+
+        vNormal = mul(vNormal, WorldMatrix);
+    
+        Out.vNormal = vector(vNormal.xyz * 0.5f + 0.5f, 1.f);
+        Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    }
+    else
+        discard;
+    
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+
+    return Out;
+}
+
+PS_OUT PS_GRASS(PS_IN In)
+{
+    PS_OUT Out;
+    
+    vector vMixture = MixtureTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vMtrlDiffuse = DiffuseTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vOpacity = OpacityTexture.Sample(DefaultSampler, In.vTexcoord);
+    
+    if (vOpacity.a > 0)
+    {
+        Out.vDiffuse = vMtrlDiffuse;
+        vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+        float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+        float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal, In.vNormal.xyz);
+
+        vNormal = mul(vNormal, WorldMatrix);
+    
+        Out.vNormal = vector(vNormal.xyz * 0.5f + 0.5f, 1.f);
+        Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    }
+    else
+        discard;
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+
+    return Out;
+}
+
+PS_OUT PS_FORCE(PS_IN In)
+{
+    PS_OUT Out;
+    vector vMtrlDiffuse = DiffuseTexture.Sample(DefaultSampler, In.vTexcoord);
+    Out.vDiffuse = vMtrlDiffuse;
+    Out.vNormal = vector(In.vNormal.xyz * 0.5f + 0.5f, 1.f);
+    Out.vDiffuse = (In.vTexcoord, 0.f, 1.f);
+    Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+    return Out;
+}
+
+
+PS_OUT PS_GRAD(PS_IN In)
+{
+    PS_OUT Out;
+    vector vMtrlDiffuse = GradationTexture.Sample(DefaultSampler, PaletteIndex);
+    Out.vDiffuse = vMtrlDiffuse;
+    Out.vNormal = vector(In.vNormal.xyz * 0.5f + 0.5f, 1.f);
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+    return Out;
+}
+
+PS_OUT PS_FISH(PS_IN In)
+{
+    PS_OUT Out;
+    Out.vDiffuse = float4(0.f, 0.f, 0.f, fFishAlpha);
+    Out.vNormal = vector(In.vNormal.xyz * 0.5f + 0.5f, 1.f);
+    Out.vEmission = EmmisionTexture.Sample(DefaultSampler, In.vTexcoord);
+    return Out;
+}
+
+
+PS_OUT PS_FLOWER(PS_IN In)
+{
+    PS_OUT Out;
+    vector vMixture = MixtureTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vAlbGry = AlbedoGrayTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vOpacity = OpacityTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vMtrlDiffuse = DiffuseTexture.Sample(DefaultSampler, In.vTexcoord);
+    vector vGrdDiffuse = GradationTexture.Sample(DefaultSampler, float2(1 - vMixture.g, 1 - vMixture.r));
+    
+    if (vOpacity.a > 0)
+    {
+        if (vGrdDiffuse.a > 0)
+            Out.vDiffuse = vGrdDiffuse +vAlbGry.r * 0.3f;
+        else
+            Out.vDiffuse = vMtrlDiffuse + vAlbGry.r * 0.3f;
+        
+        vector vNormalDesc = NormalTexture.Sample(DefaultSampler, In.vTexcoord);
+        float3 vNormal = vNormalDesc.xyz * 2.f - 1.f;
+    
+        float3x3 WorldMatrix = float3x3(In.vTangent, In.vBinormal, In.vNormal.xyz);
+
+        vNormal = mul(vNormal, WorldMatrix);
+    
+        Out.vNormal = vector(vNormal.xyz * 0.5f + 0.5f, 1.f);
+        Out.vDepth = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zFar, 0.f, 1.f);
+    }
+    else
+        discard;
+    
+    return Out;
+}
+
+struct VS_OUT_SHADOW
+{
+    float4 vPosition : SV_POSITION;
+    float4 vProjPos : TEXCOORD0;
+};
+
+VS_OUT_SHADOW VS_MAIN_SHADOW(VS_IN In)
+{
+    VS_OUT_SHADOW Out;
+    
+    float fWeightW = 1.0 - (In.vBlendWeight.x + In.vBlendWeight.y + In.vBlendWeight.z);
+
+    float4x4 BoneMatrix =
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.x].BoneMat * In.vBlendWeight.x +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.y].BoneMat * In.vBlendWeight.y +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.z].BoneMat * In.vBlendWeight.z +
+        g_BoneMatrices[SkinningOffset + In.vBlendIndex.w].BoneMat * fWeightW;
+    
+    vector vPosition = mul(float4(In.vPosition, 1.f), BoneMatrix);
+    
+    float3 worldPos = mul(vPosition, ObjectBufferArray[TransformIndex].Transform).xyz;
+    float3 toObj = worldPos - vCamPosition.xyz;
+    float dist = dot(toObj, CameraForward);
+    float curve = (dist * dist) / PlanetRadius * CurveStrength;
+    worldPos.y -= curve;
+    
+    float4 viewPos = mul(float4(worldPos, 1.f), matShadowView);
+    float4 projPos = mul(viewPos, matShadowProjection);
+    
+    Out.vPosition = projPos;
+    Out.vProjPos = Out.vPosition;
+    
+    return Out;
+}
+
+struct PS_IN_SHDOW
+{
+    float4 vPosition : SV_POSITION;
+    float4 vProjPos : TEXCOORD0;
+};
+
+struct PS_OUT_SHADOW
+{
+    vector vShadow : SV_TARGET0;
+};
+
+PS_OUT_SHADOW PS_MAIN_SHADOW(PS_IN_SHDOW In)
+{
+    PS_OUT_SHADOW Out;
+ 
+    Out.vShadow = vector(In.vProjPos.z / In.vProjPos.w, In.vProjPos.w / zShadowFar, 0.f, 0.f);
+  
+    return Out;
+}
+
+technique11 DefaultTechnique
+{
+    pass Opaque
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_MAIN();
+    }
+
+    pass SkinShader
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_SKIN();
+    } 
+
+    pass Tree
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_TREE();
+    }
+    pass Leaf
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_LEAF();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_LEAF();
+    }
+    pass Grass
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_GRASS();
+    }
+    pass Flower
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_FLOWER();
+    }
+
+    pass Fish
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_AlphaBlend, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_FISH();
+    }
+
+    pass Net
+    {
+        SetRasterizerState(RS_NoCull);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_NET();
+    }
+    pass ForceSee
+    {
+        SetRasterizerState(RS_NoCull);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_NOCURVE_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_FORCE();
+    }
+    pass Gradation
+    {
+        SetRasterizerState(RS_NoCull);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_NOCURVE_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_GRAD();
+    }
+    pass Structure
+    {
+        SetRasterizerState(RS_NoCull);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+        VertexShader = compile vs_5_0 VS_MAIN();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_MAIN();
+    }
+    pass Shadow
+    {
+        SetRasterizerState(RS_Default);
+        SetDepthStencilState(DSS_Default, 0);
+        SetBlendState(BS_Default, float4(0.f, 0.f, 0.f, 0.f), 0xffffffff);
+
+        VertexShader = compile vs_5_0 VS_MAIN_SHADOW();
+        GeometryShader = NULL;
+        PixelShader = compile ps_5_0 PS_MAIN_SHADOW();
+    }
+}
+

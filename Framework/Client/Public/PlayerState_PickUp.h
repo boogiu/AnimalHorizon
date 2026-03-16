@@ -1,0 +1,31 @@
+#pragma once
+#include "PlayerState.h"
+NS_BEGIN(Client)
+class CPlayerState_PickUp :
+    public CPlayerState
+{
+private:
+    CPlayerState_PickUp();
+    virtual ~CPlayerState_PickUp() DEFAULT;
+
+public:
+    virtual HRESULT OnEnter();
+    virtual void OnUpdate(_float dt);
+    virtual HRESULT OnExit();
+    virtual CState* HandleTransition();
+
+public:
+    void OnCollisionEnter(COLLISION_CONTEXT context) override;
+
+    virtual void Render_State();
+public:
+    virtual _uint Get_InputMask() const override;
+
+private:
+    _bool Item_Found = false;
+    _bool m_SoundComplete = false;
+public:
+    static CPlayerState_PickUp* Create();
+    virtual void Free();
+};
+NS_END
